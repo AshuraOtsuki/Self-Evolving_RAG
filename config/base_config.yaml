@@ -1,0 +1,98 @@
+# ------------------------------------------------Global Paths------------------------------------------------#
+# You can leave these empty when using --llm_provider openai/ollama.
+model2path:
+  e5: ~
+  llama3-8B-instruct: ~
+  llama3.2-3B-instruct: ~
+  llama2-7B: ~
+  qwen2.5-14B: ~
+
+model2pooling:
+  e5: "mean"
+  bge: "cls"
+  contriever: "mean"
+  jina: "mean"
+  dpr: "cls"
+
+method2index:
+  e5: ~
+  bm25: ~
+  contriever: ~
+
+# ------------------------------------------------Environment Settings------------------------------------------------#
+data_dir: "./data/flashrag_tiny/"
+save_dir: "./output/"
+
+gpu_id: "0"
+dataset_name: "StrategyQA"
+split: ["dev"]
+
+test_sample_num: ~
+random_sample: true
+seed: 2024
+
+save_intermediate_data: true
+save_note: "experiment"
+
+# -------------------------------------------------Retrieval Settings------------------------------------------------#
+retrieval_method: "e5"
+index_path: "./wiki_corpus/e5_flat_inner.index"
+faiss_gpu: false
+corpus_path: "./wiki_corpus/wiki18_100w.jsonl"
+
+instruction: ~
+retrieval_topk: 3
+retrieval_batch_size: 256
+retrieval_use_fp16: true
+retrieval_query_max_length: 128
+save_retrieval_cache: false
+use_retrieval_cache: false
+retrieval_cache_path: ~
+retrieval_pooling_method: ~
+
+use_reranker: false
+rerank_model_name: ~
+rerank_model_path: ~
+rerank_pooling_method: ~
+rerank_topk: 3
+rerank_max_length: 512
+rerank_batch_size: 256
+rerank_use_fp16: true
+
+# -------------------------------------------------Generator Settings------------------------------------------------#
+# main.py can override this via --llm_provider openai/ollama.
+framework: "vllm"
+generator_model: "llama3-8B-instruct"
+generator_max_input_len: 4096
+generator_batch_size: 2
+generation_params:
+  do_sample: false
+  max_tokens: 256
+use_fid: false
+
+# -------------------------------------------------Refiner Settings------------------------------------------------#
+refiner_name: ~
+refiner_model_path: ~
+
+refiner_topk: 3
+refiner_pooling_method: "mean"
+refiner_encode_max_length: 256
+refiner_max_input_length: 1024
+refiner_max_output_length: 512
+
+llmlingua_config:
+  rate: 0.55
+  condition_in_question: "after_condition"
+  reorder_context: "sort"
+  dynamic_context_compression_ratio: 0.3
+  condition_compare: true
+  context_budget: "+100"
+  rank_method: "longllmlingua"
+sc_config:
+  reduce_ratio: 0.5
+
+# -------------------------------------------------Evaluation Settings------------------------------------------------#
+metrics: ["em", "f1", "acc", "precision", "recall"]
+metric_setting:
+  retrieval_recall_topk: 3
+save_metric_score: true

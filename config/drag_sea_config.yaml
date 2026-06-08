@@ -1,0 +1,35 @@
+openai:
+  model: "gpt-4.1-mini"
+  reasoning_effort: null
+  temperature: 0.0
+  max_output_tokens: 512
+  timeout_seconds: 60
+  max_retries: 3
+  structured_output: true
+
+memory:
+  enabled: true
+  path: "./output/drag_sea/memory.sqlite"
+  top_k_lessons: 5
+  min_lesson_score: 0.15
+  decay_half_life_days: 60
+
+adaptive_stopping:
+  enabled: true
+  min_rounds: 1
+  max_rounds: 3
+  agreement_threshold: 0.85
+  evidence_threshold: 0.75
+  stability_threshold: 0.85
+  drift_risk_threshold: 0.65
+
+signals:
+  dtcls_enabled: true
+  crds_enabled: true
+  extract_lessons_after_each_episode: true
+  apply_memory_ops: true
+
+run:
+  save_episode_jsonl: true
+  save_prompts: false
+  save_raw_llm_outputs: true

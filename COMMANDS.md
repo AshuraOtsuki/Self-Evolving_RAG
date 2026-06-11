@@ -10,6 +10,28 @@ pip install -U pip
 pip install -r "..\Debate-Augmented-RAG\requirements.txt"
 ```
 
+## 1b) Setup With Bash Script
+
+This installs Python dependencies, downloads tiny FlashRAG datasets, downloads the E5 retriever model, and attempts to download the FlashRAG `wiki18_100w` corpus/index into `.\wiki_corpus\`.
+
+```bash
+cd "d:/Learning/Research P-L/AAMAS/Self-Evolving_RAG"
+bash scripts/setup_drag_single.sh
+```
+
+The script writes `config/local_setup_overrides.json`, which can be passed to `main.py`:
+
+```bash
+python main.py \
+  --method_name drag_single \
+  --dataset_name strategyqa \
+  --split dev \
+  --test_sample_num 10 \
+  --llm_provider openai \
+  --generator_model gpt-4o-mini \
+  --config_json config/local_setup_overrides.json
+```
+
 ## 2) Build Tiny Local Dataset (Optional)
 
 ```powershell
@@ -86,9 +108,68 @@ python .\main.py --method_name selfrag     --dataset_name strategyqa --split dev
 python .\main.py --method_name retrobust   --dataset_name strategyqa --split dev
 python .\main.py --method_name mad         --dataset_name strategyqa --split dev
 python .\main.py --method_name drag        --dataset_name strategyqa --split dev
+python .\main.py --method_name drag_single --dataset_name strategyqa --split dev
 ```
 
-## 8) Debate-Specific Controls
+## 8) DRAG Query Debate + Single Answer Call
+
+`drag_single` keeps DRAG's query-stage debate, then removes response debate. After the final query pool is built, it answers with one LLM call over the retrieved documents.
+
+```powershell
+python .\main.py `
+  --method_name drag_single `
+  --dataset_name strategyqa `
+  --split dev `
+  --test_sample_num 10 `
+  --max_query_debate_rounds 3
+```
+
+With OpenAI:
+
+```powershell
+$env:OPENAI_API_KEY = "<YOUR_OPENAI_API_KEY>"
+python .\main.py `
+  --method_name drag_single `
+  --dataset_name 2wiki `
+  --split dev `
+  --llm_provider openai `
+  --generator_model gpt-4o-mini `
+  --test_sample_num 10 `
+  --max_query_debate_rounds 3
+```
+
+With Ollama:
+
+```powershell
+python .\main.py `
+  --method_name drag_single `
+  --dataset_name 2wikimultihopqa `
+  --split dev `
+  --llm_provider ollama `
+  --generator_model llama3.1:8b `
+  --ollama_base_url http://localhost:11434/v1 `
+  --test_sample_num 10 `
+  --max_query_debate_rounds 3
+```
+
+Useful args:
+
+- `--data_dir`: folder containing FlashRAG-style dataset folders, default `.\data\flashrag_tiny`
+- `--dataset_name`: one of `strategyqa`, `nq`, `2wiki`, `2wikimultihopqa`
+- `--split`: `train`, `dev`, or `test`
+- `--test_sample_num`: number of examples to load
+- `--base_config`: base FlashRAG yaml config, default `.\config\base_config.yaml`
+- `--config_json`: optional JSON config overrides
+- `--max_query_debate_rounds`: number of retrieval debate rounds before the single answer call
+- `--save_dir`: output root, default `.\output`
+
+Output path:
+
+```text
+Self-Evolving_RAG/output/<DatasetName>/DRAG_SINGLE/
+```
+
+## 9) Debate-Specific Controls
 
 ```powershell
 python .\main.py `
@@ -109,7 +190,7 @@ MAD-specific:
 python .\main.py --method_name mad --dataset_name strategyqa --split dev --agents 2 --rag_agents 0
 ```
 
-## 9) Useful Overrides
+## 10) Useful Overrides
 
 ```powershell
 python .\main.py `
@@ -120,7 +201,7 @@ python .\main.py `
   --save_dir .\output
 ```
 
-## 10) Outputs
+## 11) Outputs
 
 Run outputs are saved under:
 

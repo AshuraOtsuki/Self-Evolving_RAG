@@ -20,7 +20,7 @@ def _normalize_openai_conversation(prompt):
 
 
 def _safe_generate_batch(generator, prompts, config):
-    if config["framework"] != "openai":
+    if config.get("framework") != "openai":
         return generator.generate(prompts)
 
     conversations = [_normalize_openai_conversation(prompt) for prompt in prompts]

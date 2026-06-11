@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from model.adaptive_stopping import normalize_answer, token_f1
 from model.drag_sea import DRAGSEAPipeline
+from model.mem0_memory_bank import Mem0MemoryBank
 from model.memory_bank import MemoryBank
 from model.openai_generator import OpenAIGenerator, OpenAIGeneratorConfig
 
@@ -85,6 +86,15 @@ def parse_args():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--openai_model", type=str, default=None)
     parser.add_argument("--memory_path", type=str, default=str(REPO_ROOT / "output" / "drag_sea" / "memory.sqlite"))
+    parser.add_argument("--memory_backend", choices=["sqlite", "mem0"], default=None)
+    parser.add_argument("--mem0_provider", choices=["oss", "platform"], default=None)
+    parser.add_argument("--mem0_api_key", type=str, default=None)
+    parser.add_argument("--mem0_user_id", type=str, default=None)
+    parser.add_argument("--mem0_agent_id", type=str, default=None)
+    parser.add_argument("--mem0_app_id", type=str, default=None)
+    parser.add_argument("--mem0_run_id", type=str, default=None)
+    parser.add_argument("--mem0_search_threshold", type=float, default=None)
+    parser.add_argument("--mem0_infer", action="store_true")
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--config", type=str, default=str(REPO_ROOT / "config" / "drag_sea_config.yaml"))
     parser.add_argument("--max_query_debate_rounds", type=int, default=3)
@@ -164,9 +174,16 @@ def load_config(path):
         "signals": {"dtcls_enabled": True, "crds_enabled": True, "apply_memory_ops": True},
         "run": {"save_prompts": False},
     }
+    config_path = Path(path)
+    if config_path.suffix.lower() == ".json":
+        with open(config_path, "r", encoding="utf-8") as file:
+            loaded = json.load(file) or {}
+        for key, value in defaults.items():
+            loaded.setdefault(key, value)
+        return loaded
     if yaml is None:
         return defaults
-    with open(path, "r", encoding="utf-8") as file:
+    with open(config_path, "r", encoding="utf-8") as file:
         loaded = yaml.safe_load(file) or {}
     for key, value in defaults.items():
         loaded.setdefault(key, value)
@@ -194,6 +211,31 @@ def make_generator(args, cfg):
             reasoning_effort=openai_cfg.get("reasoning_effort"),
         )
     )
+
+
+def make_memory(args, cfg):
+    if args.no_memory:
+        return None
+    memory_cfg = cfg.get("memory", {})
+    backend = args.memory_backend or memory_cfg.get("backend", "sqlite")
+    if backend == "mem0":
+        return Mem0MemoryBank(
+            args.memory_path,
+            provider=args.mem0_provider or memory_cfg.get("mem0_provider", "oss"),
+            api_key=args.mem0_api_key or os.getenv("MEM0_API_KEY"),
+            user_id=args.mem0_user_id or memory_cfg.get("mem0_user_id", "drag_sea"),
+            agent_id=args.mem0_agent_id or memory_cfg.get("mem0_agent_id", "drag_sea"),
+            app_id=args.mem0_app_id or memory_cfg.get("mem0_app_id"),
+            run_id=args.mem0_run_id or memory_cfg.get("mem0_run_id"),
+            search_threshold=(
+                args.mem0_search_threshold
+                if args.mem0_search_threshold is not None
+                else float(memory_cfg.get("mem0_search_threshold", 0.0) or 0.0)
+            ),
+            infer=args.mem0_infer or bool(memory_cfg.get("mem0_infer", False)),
+            mem0_config=memory_cfg.get("mem0_config"),
+        )
+    return MemoryBank(args.memory_path)
 
 
 def write_jsonl(path, rows):
@@ -291,7 +333,7 @@ def main():
     output_dir = build_output_dir(args, dataset_name)
     output_dir.mkdir(parents=True, exist_ok=True)
     generator = make_generator(args, cfg)
-    memory = None if args.no_memory else MemoryBank(args.memory_path)
+    memory = make_memory(args, cfg)
     retriever = MetadataRetriever(items, topk=3)
     memory_cfg = cfg.get("memory", {})
     memory_cfg["enabled"] = not args.no_memory

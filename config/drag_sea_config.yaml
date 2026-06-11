@@ -9,10 +9,19 @@ openai:
 
 memory:
   enabled: true
+  backend: "sqlite"   # "sqlite" or "mem0"
   path: "./output/drag_sea/memory.sqlite"
   top_k_lessons: 5
   min_lesson_score: 0.15
   decay_half_life_days: 60
+  mem0_provider: "oss"   # "oss" or "platform"
+  mem0_user_id: "drag_sea"
+  mem0_agent_id: "drag_sea"
+  mem0_app_id: null
+  mem0_run_id: null
+  mem0_search_threshold: 0.0
+  mem0_infer: false
+  mem0_config: null
 
 adaptive_stopping:
   enabled: true

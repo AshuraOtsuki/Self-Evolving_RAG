@@ -15,6 +15,9 @@ if str(REPO_ROOT) not in sys.path:
 
 METHOD_NAME_MAP = {
     "drag": "DRAG",
+    "drag_single": "DRAG_SINGLE",
+    "drag_single_answer": "DRAG_SINGLE",
+    "drag_query_single": "DRAG_SINGLE",
     "naive_gen": "naive_gen",
     "naive_rag": "naive_rag",
     "flare": "flare",
@@ -53,7 +56,7 @@ def parse_args():
         type=str,
         default="naive_gen",
         help=(
-            "Method to run. Supported: drag, naive_gen, naive_rag, flare, iterretgen, "
+            "Method to run. Supported: drag, drag_single, naive_gen, naive_rag, flare, iterretgen, "
             "ircot, self_ask, sure, selfrag, retrobust, mad."
         ),
     )
@@ -201,6 +204,9 @@ def ensure_flashrag_basic_config(base_config_path):
     except Exception:
         return
 
+    if not hasattr(flashrag_config_pkg, "__file__"):
+        return
+
     pkg_dir = Path(flashrag_config_pkg.__file__).resolve().parent
     basic_config_path = pkg_dir / "basic_config.yaml"
     if basic_config_path.exists():
@@ -309,6 +315,17 @@ def run_method(cfg, method_name, dataset, do_eval):
             query_opponent_agent=cfg["query_opponent_agent"],
             answer_proponent_agent=cfg["answer_proponent_agent"],
             answer_opponent_agent=cfg["answer_opponent_agent"],
+        )
+        return pipeline.run(dataset, do_eval=do_eval)
+
+    if method_name == "DRAG_SINGLE":
+        from model.baselines.DRAG_single import QueryDebateSingleAnswerRAG
+
+        pipeline = QueryDebateSingleAnswerRAG(
+            cfg,
+            max_query_debate_rounds=cfg["max_query_debate_rounds"],
+            query_proponent_agent=cfg["query_proponent_agent"],
+            query_opponent_agent=cfg["query_opponent_agent"],
         )
         return pipeline.run(dataset, do_eval=do_eval)
 

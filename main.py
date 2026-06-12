@@ -98,6 +98,7 @@ def parse_args():
     parser.add_argument("--model_path", type=str, default=None)
     parser.add_argument("--framework", type=str, default=None)
     parser.add_argument("--retrieval_method", type=str, default=None)
+    parser.add_argument("--retrieval_model_path", type=str, default=None)
     parser.add_argument("--index_path", type=str, default=None)
     parser.add_argument("--corpus_path", type=str, default=None)
     parser.add_argument("--generator_batch_size", type=int, default=None)

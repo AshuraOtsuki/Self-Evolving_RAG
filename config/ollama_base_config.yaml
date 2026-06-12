@@ -4,7 +4,7 @@
 
 # ------------------------------------------------Global Paths------------------------------------------------#
 model2path:
-  e5: "intfloat/e5-base-v2"
+  e5: "./embed_model"
   llama3.1:8b: ~
   llama3.2:3b: ~
   qwen2.5:7b: ~
@@ -65,7 +65,7 @@ rerank_use_fp16: true
 # -------------------------------------------------Generator Settings------------------------------------------------#
 # FlashRAG talks to Ollama through its OpenAI-compatible API.
 framework: "openai"
-generator_model: "llama3.1:8b"
+generator_model: "qwen3.5:9b"
 generator_max_input_len: 4096
 generator_batch_size: 1
 openai_setting:

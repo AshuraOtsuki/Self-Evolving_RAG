@@ -1,0 +1,124 @@
+# Python 3.10.20 compatible requirements for Debate-Augmented-RAG.
+#
+# Notes:
+# - The original file was exported from a conda/Linux environment and included
+#   local build URLs such as `package @ file:///...`; those are not portable.
+# - vLLM and xFormers are Linux/CUDA-oriented. On Windows, use `framework: hf`
+#   in `config/base_config.yaml`, or run the vLLM setup from WSL/Linux.
+# - FlashRAG recommends installing FAISS with conda when pip wheels are not
+#   available for your platform:
+#   `conda install -c pytorch faiss-cpu=1.8.0`
+
+# Core project
+flashrag-dev==0.1.4.dev20250111
+HTML4Vision==0.4.3
+Levenshtein==0.26.1
+python-Levenshtein==0.26.1
+PyYAML==6.0.2
+tqdm==4.67.1
+
+# LLM / RAG frameworks
+accelerate==1.3.0
+datasets==3.2.0
+fschat==0.2.36
+huggingface-hub==0.27.1
+openai==1.59.8
+peft==0.14.0
+safetensors==0.5.2
+sentence-transformers==3.3.1
+sentencepiece==0.2.0
+tiktoken==0.7.0
+tokenizers==0.21.0
+torch==2.5.1
+torchvision==0.20.1
+transformers==4.48.0
+
+# Retrieval / indexing
+bm25s==0.2.0
+faiss-cpu==1.8.0; platform_system != "Windows"
+pyserini==0.43.0
+rank-bm25==0.2.2
+
+# Data science stack
+matplotlib==3.10.0
+networkx==3.4.2
+nltk==3.9.1
+numba==0.60.0
+numpy==1.26.4
+pandas==2.2.3
+pyarrow==19.0.0
+scikit-learn==1.6.1
+scipy==1.15.1
+spacy==3.6.1
+umap-learn==0.5.7
+
+# API / web UI utilities used by FlashRAG and visualisation helpers
+aiohttp==3.11.11
+altair==5.5.0
+fastapi==0.115.6
+Flask==3.1.0
+httpx==0.28.1
+Jinja2==3.1.5
+jsonschema==4.23.0
+pydantic==2.10.5
+ray==2.40.0
+requests==2.32.3
+rich==13.9.4
+starlette==0.41.3
+streamlit==1.41.1
+uvicorn==0.34.0
+uvloop==0.21.0; platform_system != "Windows"
+watchdog==6.0.0
+websockets==14.1
+
+# Common runtime dependencies kept pinned for reproducibility
+aiohappyeyeballs==2.4.4
+aiosignal==1.3.2
+annotated-types==0.7.0
+anyio==4.8.0
+attrs==24.3.0
+cachetools==5.5.0
+certifi==2024.12.14
+charset-normalizer==3.4.1
+click==8.1.8
+cloudpickle==3.1.1
+coloredlogs==15.0.1
+dill==0.3.8
+diskcache==5.6.3
+distro==1.9.0
+einops==0.8.0
+exceptiongroup==1.2.2
+filelock==3.16.1
+frozenlist==1.5.0
+fsspec==2024.9.0
+GitPython==3.1.44
+h11==0.14.0
+httpcore==1.0.7
+idna==3.10
+importlib-metadata==8.5.0
+joblib==1.4.2
+MarkupSafe==3.0.2
+mpmath==1.3.0
+multidict==6.1.0
+multiprocess==0.70.16
+orjson==3.10.14
+packaging==24.2
+pillow==11.1.0
+platformdirs==4.3.6
+protobuf==5.29.3
+psutil==6.1.1
+python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
+pytz==2024.2
+regex==2024.11.6
+six==1.17.0
+smart-open==6.4.0
+sniffio==1.3.1
+sympy==1.13.1
+tenacity==9.0.0
+threadpoolctl==3.5.0
+typing_extensions==4.12.2
+tzdata==2024.2
+urllib3==2.3.0
+yarl==1.18.3
+zipp==3.21.0

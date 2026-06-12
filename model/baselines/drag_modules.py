@@ -1,6 +1,35 @@
 import Levenshtein
 
 
+def _cfg_get(config, key, default=None):
+    try:
+        return config[key]
+    except Exception:
+        return default
+
+
+def _normalize_openai_conversation(prompt):
+    if isinstance(prompt, list):
+        if all(isinstance(item, dict) for item in prompt):
+            return prompt
+        text = "\n".join(str(item) for item in prompt)
+        return [{"role": "user", "content": text}]
+    if isinstance(prompt, dict):
+        return [prompt]
+    return [{"role": "user", "content": str(prompt)}]
+
+
+def generate_single(generator, prompt, config=None):
+    if _cfg_get(config, "framework") == "openai":
+        prompt = [_normalize_openai_conversation(prompt)]
+    outputs = generator.generate(prompt)
+    if isinstance(outputs, str):
+        return outputs
+    if not outputs:
+        raise ValueError("Generator returned no output")
+    return outputs[0]
+
+
 class QueryPoolModule:
     def __init__(self, retriever):
         self.retriever = retriever
@@ -226,7 +255,7 @@ class QueryStageDebateModule:
                     },
                 ]
                 input_prompt = self.prompt_template.get_string(messages=round_message)
-                output = self.generator.generate(input_prompt)[0]
+                output = generate_single(self.generator, input_prompt, self.prompt_builder.config)
 
                 item.update_output(f"QueryStage_{agent_name}_Round{round_idx}_InputPrompt", input_prompt)
                 item.update_output(f"QueryStage_{agent_name}_Round{round_idx}_Output", output)
@@ -237,7 +266,9 @@ class QueryStageDebateModule:
                 self.prompt_builder.query_stage_moderator_message(agents_messages, input_query, query_pool)
             ]
             moderator_input_prompt = self.prompt_template.get_string(messages=moderator_message)
-            moderator_output = self.generator.generate(moderator_input_prompt)[0]
+            moderator_output = generate_single(
+                self.generator, moderator_input_prompt, self.prompt_builder.config
+            )
 
             item.update_output(f"QueryStage_Moderator_Round{round_idx}_InputPrompt", moderator_input_prompt)
             item.update_output(f"QueryStage_Moderator_Round{round_idx}_Output", moderator_output)
@@ -284,7 +315,7 @@ class AnswerStageDebateModule:
                     # initial message
                     self.agents_messages_answer_stage[agent_name] = init_message
                     input_prompt = self.prompt_template.get_string(messages=init_message)
-                    output = self.generator.generate(input_prompt)[0]
+                    output = generate_single(self.generator, input_prompt, self.prompt_builder.config)
 
                 else:
                     other_agents = {
@@ -298,7 +329,7 @@ class AnswerStageDebateModule:
                     input_prompt = self.prompt_template.get_string(
                         messages=self.agents_messages_answer_stage[agent_name]
                     )
-                    output = self.generator.generate(input_prompt)[0]
+                    output = generate_single(self.generator, input_prompt, self.prompt_builder.config)
 
                 item.update_output(f"AnswerStage_{agent_name}_Round{round_idx}_InputPrompt", input_prompt)
                 item.update_output(f"AnswerStage_{agent_name}_Round{round_idx}_Output", output)
@@ -323,7 +354,9 @@ class AnswerStageDebateModule:
                 },
             ]
             moderator_input_prompt = self.prompt_template.get_string(messages=moderator_message)
-            moderator_output = self.generator.generate(moderator_input_prompt)[0]
+            moderator_output = generate_single(
+                self.generator, moderator_input_prompt, self.prompt_builder.config
+            )
             item.update_output(f"AnswerStage_Moderator_Round{round_idx}_InputPrompt", moderator_input_prompt)
             item.update_output(f"AnswerStage_Moderator_Round{round_idx}_Output", moderator_output)
 

@@ -216,6 +216,56 @@ def ensure_flashrag_basic_config(base_config_path):
     print(f"[INFO] Created missing flashrag basic config: {basic_config_path}")
 
 
+def patch_flashrag_cpu_retriever():
+    """
+    Older FlashRAG builds unconditionally call model.cuda() for dense retrievers.
+    Patch that loader when the current PyTorch build cannot execute CUDA kernels.
+    """
+    try:
+        import torch
+    except Exception:
+        return
+
+    cuda_error = None
+    if torch.cuda.is_available():
+        try:
+            probe = torch.ones(1, device="cuda")
+            _ = (probe + 1).item()
+            return
+        except Exception as exc:
+            cuda_error = exc
+
+    else:
+        cuda_error = "CUDA is not available to PyTorch"
+
+    if cuda_error is None:
+        return
+
+    try:
+        from transformers import AutoModel, AutoTokenizer
+        import flashrag.retriever.utils as retriever_utils
+    except Exception as exc:
+        print(f"[WARN] Could not patch FlashRAG CPU retriever loader: {exc}")
+        return
+
+    def load_model_cpu(model_path, use_fp16=False):
+        model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+        model.eval()
+        model.to("cpu")
+        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=True)
+        return model, tokenizer
+
+    retriever_utils.load_model = load_model_cpu
+    try:
+        import flashrag.retriever.encoder as retriever_encoder
+
+        retriever_encoder.load_model = load_model_cpu
+    except Exception:
+        pass
+
+    print(f"[INFO] Patched FlashRAG dense retriever loader for CPU fallback: {cuda_error}")
+
+
 def apply_llm_provider_config(args, overrides):
     provider = args.llm_provider
     if provider == "default":
@@ -342,6 +392,7 @@ def main():
 
     ensure_dataset_alias_folder(args.data_dir, canonical_dataset_name)
     cfg = build_config(args, canonical_method_name, canonical_dataset_name)
+    patch_flashrag_cpu_retriever()
 
     from flashrag.utils import get_dataset
 

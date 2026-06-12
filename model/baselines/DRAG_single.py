@@ -1,8 +1,14 @@
+import re
+
 from flashrag.pipeline import BasicPipeline
 from flashrag.utils import get_generator, get_retriever
 from tqdm import tqdm
 
-from .drag_modules import PromptBuilderModule, QueryPoolModule, QueryStageDebateModule
+from .drag_modules import PromptBuilderModule, QueryPoolModule, QueryStageDebateModule, generate_single
+
+
+ANSWER_PREFIX_RE = re.compile(r"\bthe\s+answer\s+is\s*:?", re.IGNORECASE)
+SHORT_ANSWER_PREFIX_RE = re.compile(r"^(?:final\s+answer|answer)\s*:\s*", re.IGNORECASE)
 
 
 class QueryDebateSingleAnswerRAG(BasicPipeline):
@@ -32,6 +38,12 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
             )
         if agents_num != 2:
             raise ValueError("The number of agents must be 2")
+        if query_proponent_agent != 1 or query_opponent_agent != 1:
+            raise ValueError(
+                "DRAG_SINGLE requires exactly one query proponent agent and one query opponent agent"
+            )
+        if self.max_query_debate_rounds < 0:
+            raise ValueError("max_query_debate_rounds must be greater than or equal to 0")
 
         self.generator = get_generator(config) if generator is None else generator
         self.retriever = get_retriever(config) if retriever is None else retriever
@@ -81,7 +93,7 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
             {"role": "user", "content": f"Question: {item.question}\n"},
         ]
         input_prompt = self.prompt_template.get_string(messages=message)
-        output = self.generator.generate(input_prompt)[0]
+        output = generate_single(self.generator, input_prompt, self.config)
         item.update_output("answer_input_prompt", input_prompt)
         item.update_output("pred", self._parse_answer(output))
         item.update_output("raw_pred", output)
@@ -91,7 +103,24 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
         return self.query_pool_module.format_query_pool(query_pool)
 
     def _parse_answer(self, output):
-        final_answer_prefix = "The answer is:"
-        if final_answer_prefix in output:
-            return output.split(final_answer_prefix, 1)[1].strip()
-        return output.strip()
+        text = "" if output is None else str(output).strip()
+        matches = list(ANSWER_PREFIX_RE.finditer(text))
+        if matches:
+            text = text[matches[-1].end() :].strip()
+
+        text = SHORT_ANSWER_PREFIX_RE.sub("", text).strip()
+        text = text.strip("\"'`").strip()
+
+        if self._is_strategyqa():
+            match = re.match(r"^(yes|no)\b", text, re.IGNORECASE)
+            if match:
+                return match.group(1).lower()
+
+        return text
+
+    def _is_strategyqa(self):
+        try:
+            dataset_name = self.config["dataset_name"]
+        except Exception:
+            dataset_name = ""
+        return str(dataset_name).lower() == "strategyqa"

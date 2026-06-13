@@ -24,6 +24,21 @@ def debug_log(config, message):
         print(f"[DRAG_SINGLE DEBUG] {message}", flush=True)
 
 
+def render_messages(messages, config=None):
+    if _cfg_get(config, "framework") == "openai":
+        return messages
+
+    rendered = []
+    for message in messages:
+        if isinstance(message, dict):
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            rendered.append(f"{role}: {content}")
+        else:
+            rendered.append(str(message))
+    return "\n\n".join(rendered)
+
+
 def _normalize_openai_conversation(prompt):
     if isinstance(prompt, list):
         if all(isinstance(item, dict) for item in prompt):
@@ -279,7 +294,7 @@ class QueryStageDebateModule:
                         "content": f"Question: {item.question}\n{self.query_pool_module.format_query_pool(query_pool)}",
                     },
                 ]
-                input_prompt = self.prompt_template.get_string(messages=round_message)
+                input_prompt = render_messages(round_message, self.prompt_builder.config)
                 output = generate_single(self.generator, input_prompt, self.prompt_builder.config)
                 debug_log(
                     self.prompt_builder.config,
@@ -294,7 +309,7 @@ class QueryStageDebateModule:
             moderator_message = [
                 self.prompt_builder.query_stage_moderator_message(agents_messages, input_query, query_pool)
             ]
-            moderator_input_prompt = self.prompt_template.get_string(messages=moderator_message)
+            moderator_input_prompt = render_messages(moderator_message, self.prompt_builder.config)
             moderator_output = generate_single(
                 self.generator, moderator_input_prompt, self.prompt_builder.config
             )

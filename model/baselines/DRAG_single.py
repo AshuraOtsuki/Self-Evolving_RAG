@@ -10,6 +10,7 @@ from .drag_modules import (
     QueryStageDebateModule,
     debug_log,
     generate_single,
+    render_messages,
     _preview,
 )
 
@@ -106,7 +107,7 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
             self.prompt_builder_module.answer_only_message(query_pool),
             {"role": "user", "content": f"Question: {item.question}\n"},
         ]
-        input_prompt = self.prompt_template.get_string(messages=message)
+        input_prompt = render_messages(message, self.config)
         debug_log(self.config, f"Answer prompt chars={len(input_prompt)}")
         output = generate_single(self.generator, input_prompt, self.config)
         parsed = self._parse_answer(output)

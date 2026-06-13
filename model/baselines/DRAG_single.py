@@ -4,7 +4,14 @@ from flashrag.pipeline import BasicPipeline
 from flashrag.utils import get_generator, get_retriever
 from tqdm import tqdm
 
-from .drag_modules import PromptBuilderModule, QueryPoolModule, QueryStageDebateModule, generate_single
+from .drag_modules import (
+    PromptBuilderModule,
+    QueryPoolModule,
+    QueryStageDebateModule,
+    debug_log,
+    generate_single,
+    _preview,
+)
 
 
 ANSWER_PREFIX_RE = re.compile(r"\bthe\s+answer\s+is\s*:?", re.IGNORECASE)
@@ -77,11 +84,18 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
         )
 
     def run(self, dataset, do_eval=True):
-        for item in tqdm(dataset, desc="Inference: "):
+        debug_log(
+            self.config,
+            f"Starting DRAG_SINGLE samples={len(dataset) if hasattr(dataset, '__len__') else 'unknown'} do_eval={do_eval}",
+        )
+        for idx, item in enumerate(tqdm(dataset, desc="Inference: ")):
+            debug_log(self.config, f"Sample {idx} question='{_preview(item.question, self.config)}'")
             query_pool = self.query_stage_debate(item)
             item.update_output("QueryStage_QueryPool", query_pool)
+            debug_log(self.config, f"Sample {idx} query_pool_size={len(query_pool)}")
             self.single_answer(item, query_pool)
 
+        debug_log(self.config, "Calling FlashRAG evaluate/save")
         return self.evaluate(dataset, do_eval=do_eval)
 
     def query_stage_debate(self, item):
@@ -93,10 +107,13 @@ class QueryDebateSingleAnswerRAG(BasicPipeline):
             {"role": "user", "content": f"Question: {item.question}\n"},
         ]
         input_prompt = self.prompt_template.get_string(messages=message)
+        debug_log(self.config, f"Answer prompt chars={len(input_prompt)}")
         output = generate_single(self.generator, input_prompt, self.config)
+        parsed = self._parse_answer(output)
         item.update_output("answer_input_prompt", input_prompt)
-        item.update_output("pred", self._parse_answer(output))
+        item.update_output("pred", parsed)
         item.update_output("raw_pred", output)
+        debug_log(self.config, f"Final parsed answer='{_preview(parsed, self.config)}'")
         return output
 
     def format_query_pool(self, query_pool):

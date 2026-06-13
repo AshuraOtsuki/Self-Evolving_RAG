@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import json
 import os
 import shutil
@@ -111,6 +112,17 @@ def parse_args():
     parser.add_argument("--agents", type=int, default=2)
     parser.add_argument("--rag_agents", type=int, default=0)
     parser.add_argument("--do_eval", action="store_true")
+    parser.add_argument(
+        "--debug_steps",
+        action="store_true",
+        help="Print concise per-step debug logs and write debug_steps.jsonl after the run.",
+    )
+    parser.add_argument(
+        "--debug_preview_chars",
+        type=int,
+        default=240,
+        help="Maximum characters to print for debug previews.",
+    )
 
     # LLM provider selection (default keeps the existing FlashRAG config behavior).
     parser.add_argument(
@@ -330,6 +342,8 @@ def build_config(args, canonical_method_name, canonical_dataset_name):
         "answer_opponent_agent": args.answer_opponent_agent,
         "agents": args.agents,
         "rag_agents": args.rag_agents,
+        "debug_steps": args.debug_steps,
+        "debug_preview_chars": args.debug_preview_chars,
     }
 
     optional_fields = {
@@ -386,6 +400,147 @@ def run_method(cfg, method_name, dataset, do_eval):
     return runner.run(method_name, dataset, do_eval=do_eval)
 
 
+def _json_default(value):
+    if isinstance(value, Path):
+        return str(value)
+    try:
+        return value.item()
+    except Exception:
+        return str(value)
+
+
+def _item_get(item, key, default=None):
+    if isinstance(item, dict):
+        return item.get(key, default)
+    if hasattr(item, key):
+        return getattr(item, key)
+    output = getattr(item, "output", None)
+    if isinstance(output, dict) and key in output:
+        return output[key]
+    outputs = getattr(item, "outputs", None)
+    if isinstance(outputs, dict) and key in outputs:
+        return outputs[key]
+    return default
+
+
+def _public_item_state(item):
+    state = {}
+    if isinstance(item, dict):
+        state.update(item)
+    elif hasattr(item, "__dict__"):
+        state.update(
+            {
+                key: value
+                for key, value in vars(item).items()
+                if not key.startswith("_")
+            }
+        )
+        for output_key in ["output", "outputs"]:
+            output = state.get(output_key)
+            if isinstance(output, dict):
+                for key, value in output.items():
+                    state.setdefault(key, value)
+
+    for key in [
+        "id",
+        "question",
+        "golden_answers",
+        "answers",
+        "pred",
+        "raw_pred",
+        "QueryStage_QueryPool",
+        "answer_input_prompt",
+    ]:
+        value = _item_get(item, key)
+        if value is not None and key not in state:
+            state[key] = value
+
+    return state
+
+
+def _prediction_record(item, idx):
+    return {
+        "sample_id": _item_get(item, "id", idx),
+        "question": _item_get(item, "question"),
+        "golden_answers": _item_get(item, "golden_answers", _item_get(item, "answers")),
+        "pred": _item_get(item, "pred"),
+        "raw_pred": _item_get(item, "raw_pred"),
+    }
+
+
+def _debug_record(item, idx):
+    state = _public_item_state(item)
+    step_keys = sorted(
+        key
+        for key in state
+        if key.startswith("QueryStage_") or key.startswith("AnswerStage_") or key == "answer_input_prompt"
+    )
+    return {
+        "sample_id": _item_get(item, "id", idx),
+        "question": _item_get(item, "question"),
+        "pred": _item_get(item, "pred"),
+        "steps": {key: state.get(key) for key in step_keys},
+    }
+
+
+def _write_jsonl(path, records):
+    with open(path, "w", encoding="utf-8") as file:
+        for record in records:
+            file.write(json.dumps(record, ensure_ascii=False, default=_json_default) + "\n")
+
+
+def _artifact_dir_for_run(save_dir):
+    if (save_dir / "config.yaml").exists():
+        return save_dir
+
+    run_dirs = [
+        path
+        for path in save_dir.iterdir()
+        if path.is_dir() and (path / "config.yaml").exists()
+    ]
+    if not run_dirs:
+        return save_dir
+
+    return max(run_dirs, key=lambda path: (path / "config.yaml").stat().st_mtime)
+
+
+def save_custom_run_artifacts(cfg, dataset):
+    save_root = Path(cfg["save_dir"])
+    save_root.mkdir(parents=True, exist_ok=True)
+    save_dir = _artifact_dir_for_run(save_root)
+    items = list(dataset)
+
+    predictions_path = save_dir / "predictions.jsonl"
+    full_output_path = save_dir / "input_output.jsonl"
+    run_summary_path = save_dir / "run_summary.json"
+
+    _write_jsonl(predictions_path, [_prediction_record(item, idx) for idx, item in enumerate(items)])
+    _write_jsonl(full_output_path, [_public_item_state(item) for item in items])
+
+    if cfg.get("debug_steps"):
+        _write_jsonl(save_dir / "debug_steps.jsonl", [_debug_record(item, idx) for idx, item in enumerate(items)])
+
+    summary = {
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "method_name": cfg["method_name"],
+        "dataset_name": cfg["dataset_name"],
+        "save_root": str(save_root),
+        "save_dir": str(save_dir),
+        "sample_count": len(items),
+        "prediction_count": sum(1 for item in items if _item_get(item, "pred") is not None),
+        "debug_steps": bool(cfg.get("debug_steps")),
+    }
+    with open(run_summary_path, "w", encoding="utf-8") as file:
+        json.dump(summary, file, indent=2, ensure_ascii=False, default=_json_default)
+
+    return {
+        "predictions": predictions_path,
+        "input_output": full_output_path,
+        "run_summary": run_summary_path,
+        "debug_steps": save_dir / "debug_steps.jsonl" if cfg.get("debug_steps") else None,
+    }
+
+
 def main():
     args = parse_args()
     canonical_method_name = normalize_method_name(args.method_name)
@@ -403,12 +558,24 @@ def main():
         raise KeyError(f"Split '{args.split}' is not available. Available splits: {available}")
 
     test_data = all_splits[args.split]
+    if args.debug_steps:
+        print(
+            "[DEBUG] "
+            f"Starting method={canonical_method_name}, dataset={canonical_dataset_name}, split={args.split}, "
+            f"sample_count={len(test_data) if hasattr(test_data, '__len__') else 'unknown'}"
+        )
+
     run_method(cfg, canonical_method_name, test_data, do_eval=args.do_eval)
+    artifact_paths = save_custom_run_artifacts(cfg, test_data)
 
     print(
         f"Completed method={canonical_method_name}, dataset={canonical_dataset_name}, split={args.split}."
     )
     print(f"Outputs directory: {cfg['save_dir']}")
+    print(f"Predictions: {artifact_paths['predictions']}")
+    print(f"Full item outputs: {artifact_paths['input_output']}")
+    if artifact_paths["debug_steps"] is not None:
+        print(f"Debug steps: {artifact_paths['debug_steps']}")
 
 
 if __name__ == "__main__":

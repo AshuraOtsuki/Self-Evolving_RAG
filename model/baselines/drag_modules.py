@@ -8,6 +8,22 @@ def _cfg_get(config, key, default=None):
         return default
 
 
+def _debug_enabled(config):
+    return bool(_cfg_get(config, "debug_steps", False))
+
+
+def _preview(value, config=None):
+    text = "" if value is None else str(value)
+    limit = int(_cfg_get(config, "debug_preview_chars", 240) or 240)
+    text = " ".join(text.split())
+    return text[:limit] + ("..." if len(text) > limit else "")
+
+
+def debug_log(config, message):
+    if _debug_enabled(config):
+        print(f"[DRAG_SINGLE DEBUG] {message}", flush=True)
+
+
 def _normalize_openai_conversation(prompt):
     if isinstance(prompt, list):
         if all(isinstance(item, dict) for item in prompt):
@@ -20,13 +36,16 @@ def _normalize_openai_conversation(prompt):
 
 
 def generate_single(generator, prompt, config=None):
+    debug_log(config, f"LLM call prompt_chars={len(str(prompt))}")
     if _cfg_get(config, "framework") == "openai":
         prompt = [_normalize_openai_conversation(prompt)]
     outputs = generator.generate(prompt)
     if isinstance(outputs, str):
+        debug_log(config, f"LLM output={_preview(outputs, config)}")
         return outputs
     if not outputs:
         raise ValueError("Generator returned no output")
+    debug_log(config, f"LLM output={_preview(outputs[0], config)}")
     return outputs[0]
 
 
@@ -236,17 +255,23 @@ class QueryStageDebateModule:
 
         if self.max_query_debate_rounds == 0:
             input_query = item.question
+            debug_log(self.prompt_builder.config, f"Retrieving initial query='{_preview(input_query, self.prompt_builder.config)}'")
             retrieval_results = self.retriever.search(input_query)
+            debug_log(self.prompt_builder.config, f"Retrieved docs={len(retrieval_results)}")
             query_pool[input_query.strip()] = retrieval_results
             return query_pool
 
         for round_idx in range(self.max_query_debate_rounds):
+            debug_log(self.prompt_builder.config, f"Query debate round={round_idx}")
             if round_idx == 0:
                 input_query = item.question
+                debug_log(self.prompt_builder.config, f"Retrieving initial query='{_preview(input_query, self.prompt_builder.config)}'")
                 retrieval_results = self.retriever.search(input_query)
+                debug_log(self.prompt_builder.config, f"Retrieved docs={len(retrieval_results)}")
                 query_pool[input_query.strip()] = retrieval_results
 
             for agent_name in self.agents_messages_query_stage:
+                debug_log(self.prompt_builder.config, f"Running {agent_name} round={round_idx}")
                 round_message = [
                     self.prompt_builder.query_stage_system_message(agent_name),
                     {
@@ -256,6 +281,10 @@ class QueryStageDebateModule:
                 ]
                 input_prompt = self.prompt_template.get_string(messages=round_message)
                 output = generate_single(self.generator, input_prompt, self.prompt_builder.config)
+                debug_log(
+                    self.prompt_builder.config,
+                    f"{agent_name} round={round_idx} output={_preview(output, self.prompt_builder.config)}",
+                )
 
                 item.update_output(f"QueryStage_{agent_name}_Round{round_idx}_InputPrompt", input_prompt)
                 item.update_output(f"QueryStage_{agent_name}_Round{round_idx}_Output", output)
@@ -269,20 +298,27 @@ class QueryStageDebateModule:
             moderator_output = generate_single(
                 self.generator, moderator_input_prompt, self.prompt_builder.config
             )
+            debug_log(
+                self.prompt_builder.config,
+                f"Moderator round={round_idx} output={_preview(moderator_output, self.prompt_builder.config)}",
+            )
 
             item.update_output(f"QueryStage_Moderator_Round{round_idx}_InputPrompt", moderator_input_prompt)
             item.update_output(f"QueryStage_Moderator_Round{round_idx}_Output", moderator_output)
 
             if "Proponent" in moderator_output:  # Proponent wins the debate round and the query stage ends
+                debug_log(self.prompt_builder.config, f"Query debate stopped at round={round_idx} winner=Proponent")
                 return query_pool
             else:  # Opponent wins the debate round and the query stage continues
                 opponent_output = agents_messages["Opponent Agent 0"][1]
                 # Update the query pool
                 query_pool_tmp = self.query_pool_module.maintain_query_pool(query_pool, opponent_output)
                 if query_pool_tmp is None:
+                    debug_log(self.prompt_builder.config, f"Query debate stopped at round={round_idx} no query update")
                     return query_pool
                 else:
                     query_pool = query_pool_tmp
+                    debug_log(self.prompt_builder.config, f"Query pool size={len(query_pool)}")
 
         return query_pool
 

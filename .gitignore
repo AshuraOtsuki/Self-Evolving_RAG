@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+output/
+embed_model/
+wiki_corpus/
+Miniconda3-latest-Linux-aarch64.sh
+data/flashrag_tiny/StrategyQA/

@@ -412,34 +412,56 @@ def _json_default(value):
 def _item_get(item, key, default=None):
     if isinstance(item, dict):
         return item.get(key, default)
-    if hasattr(item, key):
+
+    for container_key in ["output", "outputs", "data"]:
+        try:
+            container = getattr(item, container_key)
+        except (AttributeError, KeyError):
+            container = None
+        if isinstance(container, dict) and key in container:
+            return container[key]
+
+    try:
         return getattr(item, key)
-    output = getattr(item, "output", None)
-    if isinstance(output, dict) and key in output:
-        return output[key]
-    outputs = getattr(item, "outputs", None)
-    if isinstance(outputs, dict) and key in outputs:
-        return outputs[key]
-    return default
+    except (AttributeError, KeyError):
+        return default
+
+
+def _merge_public_dict(state, value):
+    if isinstance(value, dict):
+        for key, item_value in value.items():
+            state.setdefault(key, item_value)
+
+
+def _safe_attr(item, key):
+    try:
+        return getattr(item, key)
+    except (AttributeError, KeyError):
+        return None
+
+
+def _safe_vars(item):
+    try:
+        return vars(item)
+    except TypeError:
+        return {}
 
 
 def _public_item_state(item):
     state = {}
     if isinstance(item, dict):
         state.update(item)
-    elif hasattr(item, "__dict__"):
+    else:
         state.update(
             {
                 key: value
-                for key, value in vars(item).items()
+                for key, value in _safe_vars(item).items()
                 if not key.startswith("_")
             }
         )
-        for output_key in ["output", "outputs"]:
-            output = state.get(output_key)
-            if isinstance(output, dict):
-                for key, value in output.items():
-                    state.setdefault(key, value)
+        for container_key in ["data", "output", "outputs"]:
+            _merge_public_dict(state, state.get(container_key))
+            _merge_public_dict(state, _safe_attr(item, container_key))
 
     for key in [
         "id",

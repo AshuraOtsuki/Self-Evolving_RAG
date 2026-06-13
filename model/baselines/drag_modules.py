@@ -15,8 +15,10 @@ def _debug_enabled(config):
 def _preview(value, config=None):
     text = "" if value is None else str(value)
     limit = int(_cfg_get(config, "debug_preview_chars", 240) or 240)
-    text = " ".join(text.split())
-    return text[:limit] + ("..." if len(text) > limit else "")
+    compact = " ".join(text.split())
+    if not compact:
+        return "<empty>" if text == "" else f"<whitespace chars={len(text)}>"
+    return compact[:limit] + ("..." if len(compact) > limit else "")
 
 
 def debug_log(config, message):
